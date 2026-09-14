@@ -14,7 +14,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:storage:local": "node --import ./scripts/runtime-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply STORAGE_DB --local --cwd deployment/pages",
-    "test": "node --import ./scripts/runtime-env.mjs --test --test-concurrency=1 tests/*.test.mjs"
+    "test": "node --import ./scripts/runtime-env.mjs --test --test-concurrency=1 tests/*.test.mjs",
+    "test:deployment": "npm run build && node --import ./scripts/runtime-env.mjs --test tests/deployment/*.test.mjs"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.0",

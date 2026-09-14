@@ -11,6 +11,7 @@ import { startVisiblePolling, SNAPSHOT_INTERVAL } from "@/lib/visible-polling";
 import { InvitationSettings } from "./invitation-settings";
 import { AccountSettings } from "./account-settings";
 import { DeleteAssignment } from "./delete-assignment";
+import { AttachmentSaveUnconfirmed } from "@/lib/attachment-client";
 
 async function api<T>(path:string,body?:unknown,method=body?"POST":"GET",signal?:AbortSignal):Promise<T>{
   const response=await fetch(path,{method,signal,credentials:"same-origin",cache:"no-store",...(body?{headers:{"content-type":"application/json"},body:JSON.stringify(body)}:{})});
@@ -138,7 +139,7 @@ function AssignmentDetail({a,data,busy,onBack,onEdit,onDeleted,onChange}:{a:Assi
 
 function AssignmentEditor({assignment,onClose,onSaved}:{assignment?:Assignment;onClose:()=>void;onSaved:(id:string)=>Promise<void>}){
   const dialog=useRef<HTMLDialogElement>(null),form=useRef<HTMLFormElement>(null),[busy,setBusy]=useState(false),[reading,setReading]=useState(false),[error,setError]=useState("");
-  const [sources,setSources]=useState<File[]>([]),[savedId,setSavedId]=useState<string|null>(null),[readNotice,setReadNotice]=useState("");
+  const [sources,setSources]=useState<File[]>([]),[savedId,setSavedId]=useState<string|null>(null),[readNotice,setReadNotice]=useState(""),[uncertainAttachment,setUncertainAttachment]=useState(false);
   useEffect(()=>{const node=dialog.current;node?.showModal();return()=>node?.close();},[]);
   const localDeadline=assignment?new Date(new Date(assignment.deadline).getTime()+9*60*60*1000).toISOString().slice(0,16):"";
   function applyDraft(d:AiDraft,file:File){
@@ -146,7 +147,7 @@ function AssignmentEditor({assignment,onClose,onSaved}:{assignment?:Assignment;o
     setSources(files=>[...files,file]);setReadNotice("読み取り結果を確認してください。");
   }
   async function submit(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();setBusy(true);setError("");
+    e.preventDefault();if(uncertainAttachment)return;setBusy(true);setError("");
     try{
       let id=savedId;
       if(!id){const f=new FormData(e.currentTarget);const result=await api<{id?:string}>(assignment?`/api/app/assignments/${assignment.id}`:"/api/app/assignments",{
@@ -154,7 +155,7 @@ function AssignmentEditor({assignment,onClose,onSaved}:{assignment?:Assignment;o
       },assignment?"PATCH":"POST");id=result.id??assignment!.id;setSavedId(id);}
       for(const file of sources){await uploadAttachment(id,file);setSources(remaining=>remaining.filter(f=>f!==file));}
       await onSaved(id);
-    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+    }catch(e){if(e instanceof AttachmentSaveUnconfirmed)setUncertainAttachment(true);setError((e as Error).message);}finally{setBusy(false);}
   }
   return <dialog ref={dialog} aria-labelledby="editor-title" onCancel={e=>{if(busy||reading)e.preventDefault();else onClose();}}><form ref={form} onSubmit={submit}><div className="dialog-heading"><h2 id="editor-title">{assignment?"課題を編集":"課題を登録"}</h2><button type="button" className="btn text" aria-label="閉じる" disabled={busy||reading} onClick={onClose}><X size={24}/></button></div><p className="support">共有先：クラス全員</p>
     {!assignment&&<AiInput disabled={busy||!!savedId||sources.length>=5} onDraft={applyDraft} onBusy={setReading}/>}{readNotice&&<p className="banner" role="status">{readNotice}</p>}
@@ -164,7 +165,7 @@ function AssignmentEditor({assignment,onClose,onSaved}:{assignment?:Assignment;o
     <label>説明<textarea name="description" defaultValue={assignment?.description} rows={4} maxLength={2000}/></label><label>提出形式<input name="submissionFormat" defaultValue={assignment?.submissionFormat} maxLength={100} placeholder="例：紙で提出、オンライン提出"/></label>
     <label>添付資料（任意・1件20MiB、5件まで）<input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" disabled={sources.length>=5} onChange={e=>{const file=e.target.files?.[0];if(file){if(file.size>20*1024*1024)setError("ファイルは20MiB以下にしてください。");else setSources(files=>[...files,file]);}e.target.value="";}}/></label>
     <ul className="attachment-list">{sources.map((file,i)=><li key={i}><span className="attachment-name">{file.name}</span><button className="btn text" type="button" onClick={()=>setSources(files=>files.filter((_,n)=>n!==i))}>添付から外す</button></li>)}</ul>
-    </fieldset>{savedId&&<p role="status">課題は保存済みです。添付だけを再試行できます。</p>}{error&&<p className="banner error" role="alert">{error}</p>}<div className="dialog-actions"><button type="button" className="btn outline" disabled={busy||reading} onClick={onClose}>{savedId?"閉じる":"キャンセル"}</button><button className="btn" disabled={busy||reading}>{busy?"保存しています…":savedId?"添付を再試行":"保存"}</button></div>
+    </fieldset>{savedId&&!uncertainAttachment&&<p role="status">課題は保存済みです。添付だけを再試行できます。</p>}{error&&<p className="banner error" role="alert">{error}</p>}<div className="dialog-actions"><button type="button" className="btn outline" disabled={busy||reading} onClick={onClose}>{savedId?"閉じる":"キャンセル"}</button>{uncertainAttachment&&savedId?<button type="button" className="btn" onClick={()=>void onSaved(savedId)}>添付一覧を確認</button>:<button className="btn" disabled={busy||reading}>{busy?"保存しています…":savedId?"添付を再試行":"保存"}</button>}</div>
   </form></dialog>;
 }
 
