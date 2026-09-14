@@ -26,6 +26,9 @@ export const user = sqliteTable("user", {
 export const classInvitations=sqliteTable("class_invitations",{
   classId:text("class_id").primaryKey(),codeHash:text("code_hash").notNull(),createdAt:text("created_at").notNull(),createdBy:text("created_by").notNull().references(()=>user.id),
 });
+export const classes=sqliteTable("classes",{
+  id:text("id").primaryKey(),name:text("name").notNull(),
+});
 export const session = sqliteTable("session", {
   id: text("id").primaryKey(), expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(), token: text("token").notNull().unique(),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(), updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),

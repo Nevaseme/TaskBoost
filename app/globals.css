@@ -16,3 +16,4 @@
 .pdf-preview{width:100%;min-height:180px}.pdf-pages{justify-content:center;align-items:center;margin-bottom:12px}.preview-toolbar{flex-wrap:wrap}
 
 .auth-layout{max-width:28rem;margin:1rem auto}.auth-panel h1{font-size:1.5rem}
+.btn.danger{background:var(--error);border-color:var(--error);color:#fff}.btn.text.danger{background:transparent;color:var(--error);border-color:transparent}.settings-section details{margin-block:1.5rem}.settings-section summary{cursor:pointer;font-weight:700}

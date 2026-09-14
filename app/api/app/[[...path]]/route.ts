@@ -3,3 +3,4 @@ export const GET=handleApp;
 export const POST=handleApp;
 export const PUT=handleApp;
 export const PATCH=handleApp;
+export const DELETE=handleApp;

@@ -29,7 +29,7 @@ export async function handleFiles(request: Request) {
     const url = new URL(request.url), [assignmentId, fileId] = url.pathname.replace(/^\/api\/files\//, "").split("/");
     const a = await db.prepare("SELECT id,created_by FROM assignments WHERE id=? AND class_id=?").bind(assignmentId,s.user.classId).first<{id:string;created_by:string}>();
     if (!a) throw new HttpError(404, "課題が見つかりません。");
-    if (request.method !== "GET" && a.created_by !== s.user.id) throw new HttpError(403, "添付を変更できるのは課題を登録した人だけです。");
+    if (request.method !== "GET" && a.created_by !== s.user.id && s.user.role!=="admin") throw new HttpError(403, "添付を変更できるのは課題の登録者と管理者です。");
     if (request.method === "GET" && !fileId) {
       const files = await db.prepare("SELECT id,name,content_type AS contentType,size,sha256,created_at AS createdAt FROM assignment_files WHERE assignment_id=? ORDER BY created_at").bind(a.id).all();
       return Response.json({ files: files.results }, { headers: { "Cache-Control": "no-store" } });
@@ -46,16 +46,17 @@ export async function handleFiles(request: Request) {
       const hash = createHash("sha256").update(bytes).digest("hex");
       await storage.put(key,bytes,type,hash,uploadDay);
       // D1 serializes this conditional INSERT, including simultaneous uploads.
+      // An uncertain response retains its reservation; it may have committed.
       const inserted = await db.prepare(`INSERT INTO assignment_files(id,assignment_id,storage_key,name,content_type,size,sha256,created_by,created_at)
-        SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM assignment_files WHERE assignment_id=?)<5 RETURNING id`)
-        .bind(id,a.id,key,name,type,bytes.length,hash,s.user.id,new Date().toISOString(),a.id).first();
+        SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM assignments WHERE id=?) AND (SELECT count(*) FROM assignment_files WHERE assignment_id=?)<5 RETURNING id`)
+        .bind(id,a.id,key,name,type,bytes.length,hash,s.user.id,new Date().toISOString(),a.id,a.id).first();
       if (!inserted) {
         try{await storage.delete(key);}
         catch(error){
           console.error(JSON.stringify({event:"attachment_cleanup_failed",key,error:error instanceof Error?error.name:"unknown"}));
           throw new HttpError(503,"添付の後処理を確認できませんでした。時間をおいてお試しください。");
         }
-        throw new HttpError(409,"添付は1課題につき5件までです。");
+        throw new HttpError(409,"課題が削除されたか、添付が5件に達しました。再読み込みしてください。");
       }
       return Response.json({ id, sha256: hash, size: bytes.length },{status:201});
     }

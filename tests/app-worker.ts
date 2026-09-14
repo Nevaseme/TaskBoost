@@ -1,4 +1,4 @@
-import { handleApp } from "../lib/app-server";
+import * as appRoute from "../app/api/app/[[...path]]/route";
 import { auth } from "../lib/auth";
 import { handlePush } from "../lib/push-api";
 import { handleFiles } from "../lib/file-api";
@@ -21,6 +21,7 @@ export default {
     }
     if (path.startsWith("/api/reminders/")) return handleReminders(request);
     if (path === "/api/internal/reminders/tick") return handleReminderTick(request);
-    return handleApp(request);
+    const handler=(appRoute as Record<string,(request:Request)=>Promise<Response>>)[request.method];
+    return handler?handler(request):new Response(null,{status:405});
   },
 };

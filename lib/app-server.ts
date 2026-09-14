@@ -2,6 +2,7 @@ import { z } from "zod";
 import { bindings, currentUser } from "./auth";
 import { json } from "./push-server";
 import { sendUserNotification } from "./push-api";
+import { deleteAssignment } from "./assignment-deletion";
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -37,10 +38,22 @@ export async function handleApp(request: Request) {
         db.prepare('SELECT first,half,two_thirds AS twoThirds,all_others AS allOthers FROM preferences WHERE user_id=?').bind(userId),
         db.prepare('SELECT friend_id FROM watches WHERE user_id=?').bind(userId),
         db.prepare(`SELECT n.id,n.assignment_id AS assignmentId,a.title,u.name AS actorName,n.reasons,n.created_at AS createdAt,n.read,n.push_status AS pushStatus FROM notifications n JOIN assignments a ON a.id=n.assignment_id JOIN user u ON u.id=n.actor_id WHERE n.recipient_id=? ORDER BY n.created_at DESC LIMIT 100`).bind(userId),
+        db.prepare('SELECT name FROM classes WHERE id=?').bind(classId),
       ]);
       const p = (result[3].results[0] ?? {}) as Record<string,unknown>;
-      return json({ user: { id:userId,name:s.user.name,username:s.user.username,role:s.user.role }, members:result[0].results,assignments:result[1].results,submissions:result[2].results,
+      return json({ className:(result[6].results[0] as {name:string}|undefined)?.name??"クラス", user: { id:userId,name:s.user.name,username:s.user.username,role:s.user.role }, members:result[0].results,assignments:result[1].results,submissions:result[2].results,
         preferences: { first:!!p.first,half:!!p.half,twoThirds:!!p.twoThirds,allOthers:!!p.allOthers,friends:(result[4].results as {friend_id:string}[]).map(r=>r.friend_id) }, notifications:result[5].results });
+    }
+    if(parts.length===1&&parts[0]==="class"&&request.method==="PUT"){
+      if(s.user.role!=="admin")throw new HttpError(403,"管理者だけが変更できます。");
+      const {name}=z.object({name:z.string().trim().min(1).max(60)}).strict().parse(await request.json());
+      await db.prepare('INSERT INTO classes(id,name) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').bind(classId,name).run();
+      return json({saved:true});
+    }
+    if(parts.length===1&&parts[0]==="profile"&&request.method==="PUT"){
+      const {name}=z.object({name:z.string().trim().min(1).max(40)}).strict().parse(await request.json());
+      await db.prepare('UPDATE user SET name=?,updatedAt=? WHERE id=?').bind(name,Date.now(),userId).run();
+      return json({saved:true});
     }
     if (parts[0] === "preferences" && request.method === "PUT") {
       const p = z.object({first:z.boolean(),half:z.boolean(),twoThirds:z.boolean(),allOthers:z.boolean(),friends:z.array(z.string()).max(50)}).strict().parse(await request.json());
@@ -68,10 +81,15 @@ export async function handleApp(request: Request) {
     const assignment=await db.prepare("SELECT id,created_by FROM assignments WHERE id=? AND class_id=?").bind(id,classId).first<{id:string;created_by:string}>();
     if(!assignment)throw new HttpError(404,"課題が見つかりません。");
     if (!parts[2] && request.method === "PATCH") {
-      if(assignment.created_by!==userId)throw new HttpError(403,"課題を編集できるのは登録した人だけです。");
+      if(assignment.created_by!==userId&&s.user.role!=="admin")throw new HttpError(403,"課題を変更できるのは登録者と管理者です。");
       const a=assignmentBody.parse(await request.json());
-      await db.prepare("UPDATE assignments SET subject=?,title=?,description=?,deadline=?,submission_format=? WHERE id=? AND created_by=?").bind(a.subject,a.title,a.description,new Date(a.deadline).toISOString(),a.submissionFormat,id,userId).run();
+      await db.prepare("UPDATE assignments SET subject=?,title=?,description=?,deadline=?,submission_format=? WHERE id=? AND class_id=?").bind(a.subject,a.title,a.description,new Date(a.deadline).toISOString(),a.submissionFormat,id,classId).run();
       return json({saved:true});
+    }
+    if(!parts[2]&&request.method==="DELETE"){
+      if(assignment.created_by!==userId&&s.user.role!=="admin")throw new HttpError(403,"課題を削除できるのは登録者と管理者です。");
+      await deleteAssignment(db,id,classId,userId);
+      return json({deleted:true});
     }
     if(parts[2]==="settings" && request.method==="PUT") {
       const a=z.object({importance:z.number().int().min(1).max(3),plannedFor:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(d=>!isNaN(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d).nullable()}).strict().parse(await request.json());

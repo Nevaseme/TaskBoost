@@ -9,6 +9,8 @@ import { AiInput, type AiDraft } from "./ai-input";
 import { type Assignment, type Preferences, type Snapshot, emptyPreferences, reasonLabels, todayJst } from "@/lib/types";
 import { startVisiblePolling, SNAPSHOT_INTERVAL } from "@/lib/visible-polling";
 import { InvitationSettings } from "./invitation-settings";
+import { AccountSettings } from "./account-settings";
+import { DeleteAssignment } from "./delete-assignment";
 
 async function api<T>(path:string,body?:unknown,method=body?"POST":"GET",signal?:AbortSignal):Promise<T>{
   const response=await fetch(path,{method,signal,credentials:"same-origin",cache:"no-store",...(body?{headers:{"content-type":"application/json"},body:JSON.stringify(body)}:{})});
@@ -71,7 +73,7 @@ export default function Tomodachi(){
     </div>{data&&menu&&<nav id="mobile-nav" className="mobile-nav" aria-label="メイン">{Object.entries(pages).map(([key,p])=><button key={key} aria-current={view===key?"page":undefined} onClick={()=>navigate(key as View)}>{p.label}{key==="notifications"&&unread>0?`（未読${unread}件）`:""}<ChevronRight size={18}/></button>)}</nav>}</header>
     <main id="main" tabIndex={-1}>
       {loading?<p className="loading" role="status">読み込んでいます…</p>:!data?<AuthForm onSuccess={async()=>{await refresh(true);}}/>:<>
-        <div className="page-heading"><div><p className="context"><Users size={18} aria-hidden="true"/>クラス · {data.members.length}人<span className="user-name">{data.user.name}さん</span></p><h1>{pages[view].label}</h1></div>{(view==="today"||view==="assignments")&&<button className="btn" onClick={()=>setEditor("new")}><Plus size={20} aria-hidden="true"/>課題を登録</button>}</div>
+        <div className="page-heading"><div><p className="context"><Users size={18} aria-hidden="true"/>{data.className} · {data.members.length}人<span className="user-name">{data.user.name}さん</span></p><h1>{pages[view].label}</h1></div>{(view==="today"||view==="assignments")&&<button className="btn" onClick={()=>setEditor("new")}><Plus size={20} aria-hidden="true"/>課題を登録</button>}</div>
         {view==="today"&&<>
           <p className="date-line">{new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",dateStyle:"full"}).format(new Date())}</p>
           <section className="today-summary" aria-label="今日の課題"><h2>今日やること</h2><span className="big-count">{planned.length}<small>件</small></span></section>
@@ -82,11 +84,11 @@ export default function Tomodachi(){
         {view==="assignments"&&<div className={`assignment-layout ${selectedAssignment?"has-selection":""}`}>
           <section className="assignment-list" aria-label="課題一覧"><p className="list-summary">全{data.assignments.length}件 · 未提出{active.length}件</p>
           {data.assignments.length?<div className="resource-list">{data.assignments.map(a=><AssignmentRow key={a.id} a={a} selected={selected===a.id} total={data.members.length} onOpen={()=>navigate("assignments",a.id)}/>)}</div>:<div className="empty"><BookOpen size={32} aria-hidden="true"/><h2>課題はありません</h2><button className="btn" onClick={()=>setEditor("new")}>課題を登録</button></div>}</section>
-          {selectedAssignment?<AssignmentDetail key={selectedAssignment.id} a={selectedAssignment} data={data} busy={busy} onBack={()=>navigate("assignments")} onEdit={()=>setEditor(selectedAssignment)} onChange={(action,body,message)=>mutate(`/api/app/assignments/${selectedAssignment.id}/${action}`,body,"PUT",message)}/>:<section className="detail-placeholder"><BookOpen size={40} aria-hidden="true"/><p>{selected?"課題が見つかりません。":"課題を選択"}</p></section>}
+          {selectedAssignment?<AssignmentDetail key={selectedAssignment.id} a={selectedAssignment} data={data} busy={busy} onBack={()=>navigate("assignments")} onEdit={()=>setEditor(selectedAssignment)} onDeleted={async()=>{await refresh(true);navigate("assignments");setNotice("課題を削除しました。");}} onChange={(action,body,message)=>mutate(`/api/app/assignments/${selectedAssignment.id}/${action}`,body,"PUT",message)}/>:<section className="detail-placeholder"><BookOpen size={40} aria-hidden="true"/><p>{selected?"課題が見つかりません。":"課題を選択"}</p></section>}
         </div>}
         {view==="notifications"&&<section><div className="section-heading"><h2>通知</h2>{unread>0&&<button className="btn text" disabled={busy} onClick={()=>mutate("/api/app/notifications",{},"PUT","すべて既読にしました。")}>すべて既読にする</button>}</div>
           {data.notifications.length?<div className="resource-list">{data.notifications.map(n=><button className="notification-row" key={n.id} onClick={()=>navigate("assignments",n.assignmentId)}><Bell size={22} aria-hidden="true"/><span><span className="row-title">{n.title}{!n.read&&<span className="tag">未読</span>}</span><span className="notification-body">{n.reasons.includes("reminder_")?"自分へのリマインダー":`${n.actorName}さんが提出しました`}</span><span className="metadata">{n.reasons.split(",").map(r=>reasonLabels[r]).join("・")}</span><time className="metadata">{dateTime(n.createdAt)}</time></span><ChevronRight size={20} aria-hidden="true"/></button>)}</div>:<div className="empty"><Bell size={32} aria-hidden="true"/><h3>通知はまだありません</h3><button className="btn outline" onClick={()=>navigate("settings")}>通知を設定</button></div>}</section>}
-        {view==="settings"&&<SettingsPanel data={data} busy={busy} onSave={p=>mutate("/api/app/preferences",p,"PUT","通知設定を保存しました。")} onSignOut={signOut}/>}
+        {view==="settings"&&<SettingsPanel data={data} busy={busy} onSave={p=>mutate("/api/app/preferences",p,"PUT","通知設定を保存しました。")} onSignOut={signOut} onRefresh={async()=>{await refresh(true);}}/>}
         {editor&&<AssignmentEditor assignment={editor==="new"?undefined:editor} onClose={()=>setEditor(null)} onSaved={async id=>{setEditor(null);await refresh(true);navigate("assignments",id);setNotice("課題を保存しました。");}}/>}
       </>}
       {error&&<div className="banner error" role="alert">{error}</div>}{notice&&<div className="banner success" role="status"><Check size={20} aria-hidden="true"/>{notice}</div>}
@@ -117,15 +119,15 @@ function AssignmentRow({a,total,selected,onOpen}:{a:Assignment;total:number;sele
   return <button className={`assignment-row ${selected?"selected":""}`} onClick={onOpen} aria-current={selected?"true":undefined}><span className={`subject-icon ${a.submitted?"done":""}`}>{a.submitted?<Check size={22} aria-hidden="true"/>:<BookOpen size={22} aria-hidden="true"/>}</span><span className="row-content"><span className="metadata">{a.subject}<span className={`tag ${a.submitted?"success":""}`}>{a.submitted?"提出済み":"未提出"}</span></span><span className="row-title">{a.title}</span><span className={overdue?"deadline overdue":"deadline"}>{overdue?"期限切れ · ":"締切 "}{dateTime(a.deadline)}</span><span className="metadata">{a.submittedCount}/{total}人が提出{a.importance===3?" · 重要度 高":""}{a.plannedFor===todayJst()?" · 今日やる":""}</span></span><ChevronRight size={20} aria-hidden="true"/></button>;
 }
 
-function AssignmentDetail({a,data,busy,onBack,onEdit,onChange}:{a:Assignment;data:Snapshot;busy:boolean;onBack:()=>void;onEdit:()=>void;onChange:(action:string,body:unknown,message:string)=>Promise<void>}){
+function AssignmentDetail({a,data,busy,onBack,onEdit,onDeleted,onChange}:{a:Assignment;data:Snapshot;busy:boolean;onBack:()=>void;onEdit:()=>void;onDeleted:()=>Promise<void>;onChange:(action:string,body:unknown,message:string)=>Promise<void>}){
   const touch=useRef<{x:number;y:number}|null>(null);
-  const planned=a.plannedFor===todayJst();
+  const planned=a.plannedFor===todayJst(),canEdit=a.createdBy===data.user.id||data.user.role==="admin";
   const plan=()=>onChange("settings",{importance:a.importance,plannedFor:planned?null:todayJst()},planned?"今日やることから外しました。":"今日やることに追加しました。");
   return <section className="assignment-detail" aria-label="課題の詳細" onTouchStart={e=>{touch.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}} onTouchEnd={e=>{if(!touch.current)return;const dx=e.changedTouches[0].clientX-touch.current.x,dy=e.changedTouches[0].clientY-touch.current.y;if(Math.abs(dx)>90&&Math.abs(dx)>Math.abs(dy)*2&&touch.current.x>30)void plan();touch.current=null;}}>
-    <button className="btn text back-to-list" onClick={onBack}>課題一覧に戻る</button><div className="detail-top"><span className="tag">{a.subject}</span>{a.createdBy===data.user.id&&<button className="btn text" onClick={onEdit}>編集する</button>}</div><h2>{a.title}</h2>
+    <button className="btn text back-to-list" onClick={onBack}>課題一覧に戻る</button><div className="detail-top"><span className="tag">{a.subject}</span>{canEdit&&<div className="attachment-actions"><button className="btn text" disabled={busy} onClick={onEdit}>編集する</button><DeleteAssignment id={a.id} title={a.title} onDeleted={onDeleted}/></div>}</div><h2>{a.title}</h2>
     <dl className="detail-meta"><div><dt>締切</dt><dd>{dateTime(a.deadline)}</dd></div><div><dt>登録者</dt><dd>{a.creatorName}</dd></div></dl>{a.description&&<p className="description">{a.description}</p>}
     {a.submissionFormat&&<p className="support">提出形式：{a.submissionFormat}</p>}
-    <AssignmentFiles assignmentId={a.id} canEdit={a.createdBy===data.user.id}/>
+    <AssignmentFiles assignmentId={a.id} canEdit={canEdit}/>
     <ReminderSettings key={a.id} assignmentId={a.id}/>
     <div className="personal-settings"><h3>自分の取り組み</h3><label className="check-line"><input type="checkbox" checked={planned} disabled={busy} onChange={()=>void plan()}/>今日やる</label>
       <label className="inline-label">重要度<select value={a.importance} disabled={busy} onChange={e=>void onChange("settings",{importance:Number(e.target.value),plannedFor:a.plannedFor},"重要度を変更しました。")}><option value={1}>低</option><option value={2}>中</option><option value={3}>高</option></select></label>
@@ -166,10 +168,10 @@ function AssignmentEditor({assignment,onClose,onSaved}:{assignment?:Assignment;o
   </form></dialog>;
 }
 
-function SettingsPanel({data,busy,onSave,onSignOut}:{data:Snapshot;busy:boolean;onSave:(p:Preferences)=>Promise<void>;onSignOut:()=>Promise<void>}){
-  const [p,setP]=useState<Preferences>(data.preferences??emptyPreferences);
+function SettingsPanel({data,busy,onSave,onSignOut,onRefresh}:{data:Snapshot;busy:boolean;onSave:(p:Preferences)=>Promise<void>;onSignOut:()=>Promise<void>;onRefresh:()=>Promise<void>}){
+  const [p,setP]=useState<Preferences>(data.preferences??emptyPreferences),[deviceVersion,setDeviceVersion]=useState(0);
   return <div className="settings-layout"><div><section className="settings-section"><h2>通知を受け取る条件</h2><h3>通知を受け取りたい友達</h3>{data.members.length===1&&<p className="support">他のメンバーはまだいません。</p>}{data.members.filter(m=>m.id!==data.user.id).map(m=><label className="check-line" key={m.id}><input type="checkbox" checked={p.friends.includes(m.id)} onChange={e=>setP({...p,friends:e.target.checked?[...p.friends,m.id]:p.friends.filter(id=>id!==m.id)})}/>{m.name}</label>)}<h3>クラス全体の提出</h3>{([["first","最初の1人が提出"],["half","半分が提出"],["twoThirds","3分の2が提出"],["allOthers","自分以外全員が提出"]] as const).map(([key,label])=><label className="check-line" key={key}><input type="checkbox" checked={p[key]} onChange={e=>setP({...p,[key]:e.target.checked})}/>{label}</label>)}<button className="btn" disabled={busy} onClick={()=>void onSave(p)}>通知設定を保存</button></section>
-    {data.user.role==="admin"&&<InvitationSettings/>}<section className="settings-section"><h2>アカウント</h2><dl className="detail-meta"><div><dt>表示名</dt><dd>{data.user.name}</dd></div><div><dt>ID</dt><dd>{data.user.username}</dd></div></dl><button className="btn outline" disabled={busy} onClick={()=>void onSignOut()}>ログアウト</button><p className="support">ログアウトすると、この端末への通知も停止します。</p></section></div><PushSettings/></div>;
+    {data.user.role==="admin"&&<InvitationSettings className={data.className} onSaved={onRefresh}/>}<section className="settings-section"><h2>アカウント</h2><AccountSettings name={data.user.name} username={data.user.username} onSaved={onRefresh} onPasswordChanged={async()=>{await onRefresh();setDeviceVersion(v=>v+1);}}/><button className="btn outline" disabled={busy} onClick={()=>void onSignOut()}>ログアウト</button><p className="support">ログアウトすると、この端末への通知も停止します。</p></section></div><PushSettings key={deviceVersion}/></div>;
 }
 type Device={id:string;label:string;last_result:string|null;enabled:number;currentDevice:number};
 function PushSettings(){
