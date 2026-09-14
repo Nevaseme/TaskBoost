@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789307656322,
+      "tag": "0000_deep_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789313761207,
+      "tag": "0001_bitter_the_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789326340796,
+      "tag": "0002_numerous_young_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789327137665,
+      "tag": "0003_flowery_banshee",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789328967465,
+      "tag": "0004_glossy_nico_minoru",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789353029274,
+      "tag": "0005_storage_budget",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789355530193,
+      "tag": "0006_storage_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789355607424,
+      "tag": "0007_storage_operation_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789365793135,
+      "tag": "0008_admin_invitations",
+      "breakpoints": true
+    }
+  ]
+}

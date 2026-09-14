@@ -1,0 +1,61 @@
+{
+  "name": "taskboost",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node --import ./scripts/runtime-env.mjs ./node_modules/wrangler/bin/wrangler.js pages dev --cwd deployment/pages --d1 DB=7b312b36-ebfb-469a-8630-8a284b6998b0 --d1 STORAGE_DB=0c547600-d952-42a9-ab27-c55eeb84730a --r2 BUCKET=taskboost-files --port 5173",
+    "build": "node scripts/build-pages.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
+    "dev:pages": "npm run dev",
+    "db:pages:local": "node --import ./scripts/runtime-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --local --cwd deployment/pages",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate",
+    "db:storage:local": "node --import ./scripts/runtime-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply STORAGE_DB --local --cwd deployment/pages",
+    "test": "node --import ./scripts/runtime-env.mjs --test --test-concurrency=1 tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.0",
+    "@types/web-push": "^3.6.4",
+    "better-auth": "1.6.23",
+    "drizzle-orm": "0.45.2",
+    "lucide-react": "^1.31.0",
+    "next": "16.3.4",
+    "pdfjs-dist": "6.3.289",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "web-push": "^3.6.7",
+    "zod": "4.6.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260515.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "esbuild": "0.28.0",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.3.4",
+    "http_ece": "1.2.0",
+    "miniflare": "4.20260515.0",
+    "react-server-dom-webpack": "19.2.6",
+    "sharp": "0.35.4",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vinext": "1.0.0-beta.5",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.4"
+    }
+  }
+}

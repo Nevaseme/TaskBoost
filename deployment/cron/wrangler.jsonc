@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "taskboost-reminders",
+  "main": "../../cron-worker/index.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "vars": {
+    "SITE_TICK_URL": "https://taskboost.pages.dev/api/internal/reminders/tick",
+    "MANUAL_PROBE_ENABLED": "false"
+  },
+  "triggers": { "crons": ["* * * * *"] }
+}

@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+
+test('Pages output keeps server modules private and routes static files without a function', async () => {
+  const { packagePages } = await import('../scripts/package-pages.mjs');
+  await mkdir('.sites-runtime/tests', { recursive: true });
+  const root = await mkdtemp(path.resolve('.sites-runtime/tests/pages-'));
+  for (const dir of ['client/_next/static', 'client/pdfjs', 'server/chunks']) await mkdir(path.join(root, dir), { recursive: true });
+  await writeFile(path.join(root, 'client/_next/static/app.js'), 'public bundle');
+  await writeFile(path.join(root, 'client/sw.js'), 'service worker');
+  await writeFile(path.join(root, 'client/_headers'), '/sw.js\n  Cache-Control: no-cache\n');
+  await writeFile(path.join(root, 'server/index.js'), 'export {default} from "./chunks/app.js";');
+  await writeFile(path.join(root, 'server/chunks/app.js'), 'export default {fetch(){return new Response("private")}};');
+  await writeFile(path.join(root, 'server/.dev.vars'), 'SECRET=must-not-publish');
+  await writeFile(path.join(root, 'server/wrangler.json'), '{"vars":{"SECRET":"must-not-publish"}}');
+  await packagePages(root);
+  assert.equal(await readFile(path.join(root, 'pages/_next/static/app.js'), 'utf8'), 'public bundle');
+  assert.match(await readFile(path.join(root, 'pages/_worker.js/application/chunks/app.js'), 'utf8'), /private/);
+  assert.match(await readFile(path.join(root, 'pages/_worker.js/index.js'), 'utf8'), /application\/index.js/);
+  assert.deepEqual((await readdir(path.join(root, 'pages/_worker.js/application'))).sort(), ['chunks', 'index.js']);
+  const routes = JSON.parse(await readFile(path.join(root, 'pages/_routes.json'), 'utf8'));
+  assert.deepEqual(routes.include, ['/*']);
+  assert.ok(routes.exclude.includes('/_next/static/*'));
+  assert.ok(routes.exclude.includes('/sw.js'));
+  assert.ok(!routes.exclude.some(route => route.startsWith('/api')));
+  await writeFile(path.join(root, 'pages/stale-secret.txt'), 'stale');
+  await packagePages(root);
+  assert.ok(!(await readdir(path.join(root, 'pages'))).includes('stale-secret.txt'));
+});

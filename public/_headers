@@ -1,0 +1,7 @@
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+  Content-Type: application/javascript
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache

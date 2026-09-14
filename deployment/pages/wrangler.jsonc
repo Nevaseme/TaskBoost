@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "taskboost",
+  "pages_build_output_dir": "../../dist/pages",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "taskboost-data",
+    "database_id": "7b312b36-ebfb-469a-8630-8a284b6998b0",
+    "migrations_dir": "../../drizzle"
+  }, {
+    "binding": "STORAGE_DB",
+    "database_name": "taskboost-storage",
+    "database_id": "0c547600-d952-42a9-ab27-c55eeb84730a",
+    "migrations_dir": "../storage"
+  }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taskboost-files" }]
+}
